@@ -202,7 +202,7 @@ def move():
         the_move = path_to_food[0]
     elif path_to_food[1] in options:
         the_move = path_to_food[1]
-    elif previous_moves[0] in options:
+    elif len(previous_moves) != 0 and previous_moves[0] in options:
         the_move = previous_moves[0]
     else:
         the_move = random.choice(options)
