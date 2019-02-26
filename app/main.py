@@ -98,24 +98,53 @@ def collide(a, b):
     return a["x"] == b["x"] and a["y"] == b["y"]
 
 
-def will_not_collide_wall(snake, height, width):
+def will_collide_wall(snake, height, width):
     def f(move):
         next_head = get_new_position(get_snake_head(snake), move)
-        return width > next_head["x"] >= 0 and height > next_head["y"] >= 0
+        return not (width > next_head["x"] >= 0 and height > next_head["y"] >= 0)
 
     return f
 
 
-def will_not_collide_snake(snake, snakes):
+def will_collide_snake(snake, snakes):
     def f(move):
         next_head = get_new_position(get_snake_head(snake), move)
 
         for other_snake in snakes:
             for position in other_snake["body"]:
                 if collide(position, next_head):
-                    return False
+                    return True
 
-        return True
+        return False
+
+    return f
+
+
+def will_collide_head_to_head(snake, snakes):
+    def f(move):
+        next_head = get_new_position(get_snake_head(snake), move)
+
+        for other_snake in get_other_snakes(snake, snakes):
+            for other_move in OPTIONS:
+                if collide(next_head, get_new_position(get_snake_head(other_snake), other_move)) \
+                        and other_snake["health"] >= snake["health"]:
+                    return True
+
+        return False
+
+    return f
+
+def will_kill_head_to_head(snake, snakes):
+    def f(move):
+        next_head = get_new_position(get_snake_head(snake), move)
+
+        for other_snake in get_other_snakes(snake, snakes):
+            for other_move in OPTIONS:
+                if collide(next_head, get_new_position(get_snake_head(other_snake), other_move)) \
+                        and other_snake["health"] <= snake["health"]:
+                    return True
+
+        return False
 
     return f
 
@@ -129,29 +158,15 @@ def get_other_snakes(snake, snakes):
     )
 
 
-def will_not_collide_head_to_head(snake, snakes):
-    def f(move):
-        next_head = get_new_position(get_snake_head(snake), move)
-
-        for other_snake in get_other_snakes(snake, snakes):
-            for other_move in OPTIONS:
-                if collide(next_head, get_new_position(get_snake_head(other_snake), other_move)):
-                    return False
-
-        return True
-
-    return f
-
-
 def distance_from_snake(snake):
     def f(food):
         food["distance"] = abs(food["x"] - get_snake_head(snake)["x"]) + abs(food["y"] - get_snake_head(snake)["y"])
         return food
+
     return f
 
 
 def calculate_path(snake, food, strategy="squared"):
-
     moves = []
 
     if strategy == "squared":
@@ -174,6 +189,9 @@ def calculate_path(snake, food, strategy="squared"):
 
     return moves
 
+
+
+
 @bottle.post('/move')
 def move():
     data = bottle.request.json
@@ -184,17 +202,23 @@ def move():
     """
     print(json.dumps(data))
 
+    snake0 = data["you"]
+    snakes = data["board"]["snakes"]
+    height = data["board"]["height"]
+    width = data["board"]["width"]
+    food = data["board"]["food"]
+
     previous_moves = get_previous_snake_moves(data["you"])
 
-    options = OPTIONS
-    options = list(filter(will_not_collide_wall(data["you"], data["board"]["height"], data["board"]["width"]), options))
-    options = list(filter(will_not_collide_snake(data["you"], data["board"]["snakes"]), options))
-    options = list(filter(will_not_collide_head_to_head(data["you"], data["board"]["snakes"]), options))
+    wall_collusions_ = list(filter(will_collide_wall(snake0, height, width), OPTIONS))
+    snake_colsusions = list(filter(will_collide_snake(snake0, snakes), OPTIONS))
+    possible_head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), OPTIONS))
+    possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), OPTIONS))
 
-
-    if data["you"]["health"] < 50:
-        nearest_food = sorted(list(map(distance_from_snake(data["you"]), data["board"]["food"])), key=lambda x: x["distance"])[0]
-        path_to_food = calculate_path(data["you"], nearest_food)
+    if snake0["health"] < 50:
+        nearest_food = \
+            sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
+        path_to_food = calculate_path(snake0, nearest_food)
     else:
         path_to_food = [None, None]
 
