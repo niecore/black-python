@@ -143,7 +143,7 @@ def will_kill_head_to_head(snake, snakes):
         for other_snake in get_other_snakes(snake, snakes):
             for other_move in OPTIONS:
                 if collide(next_head, get_new_position(get_snake_head(other_snake), other_move)) \
-                        and other_snake["health"] <= snake["health"]:
+                        and get_snake_len(other_snake) <= get_snake_len(snake):
                     return True
 
         return False
@@ -215,6 +215,15 @@ def floodfill(matrix, x, y):
         return
 
 
+def apply_rating(options, keys, modificator):
+
+    for key in keys:
+        try:
+            options[key] = options[key] + modificator
+        except:
+            print("unable to handle key")
+
+
 @bottle.post('/move')
 def move():
     data = bottle.request.json
@@ -250,39 +259,67 @@ def move():
     for pos in snake0["body"][1:]:
         matrix[pos["y"]][pos["x"]] = SNAKE_0
 
-    previous_moves = get_previous_snake_moves(data["you"])
+    rated_options = {option: 0 for option in OPTIONS}
 
-    # suicide moves
+    #
+    #   Negative Points
+    #
+
+    # wall collusion
     wall_collusions = list(filter(will_collide_wall(snake0, height, width), OPTIONS))
-    snake_colsusions = list(filter(will_collide_snake(snake0, snakes), OPTIONS))
+    options = list(set(OPTIONS) - set(wall_collusions))
 
-    options = list(set(OPTIONS) - set(wall_collusions) - set(snake_colsusions))
+    # snake collusion
+    snake_collusions = list(filter(will_collide_snake(snake0, snakes), options))
 
-    for option in options:
-        pass
+    # dead end
+    dead_ends = filter(
+        lambda move: reachable_positions_after_move(matrix, get_snake_head(snake0), move) <= get_snake_len(snake0),
+        options)
 
-    # head to head possibilities
-    possible_head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), options))
-    possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), options))
+    # head to head deaths
+    head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), options))
 
-    # food routes
+    apply_rating(rated_options, wall_collusions, -1000)
+    apply_rating(rated_options, snake_collusions, -1000)
+    apply_rating(rated_options, dead_ends, -800)
+    apply_rating(rated_options, head_to_head_deaths, -500)
+
+    #
+    #   Positive Points
+    #
+    #   1. Eat if hungry
+    #   2. Kill if possible
+    #   3. Continue moving
+    #
+
+    # food moves
     nearest_food = sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
     nearest_food_routes = calculate_path(snake0, nearest_food)
 
-    if path_to_food[0] in options:
-        the_move = path_to_food[0]
-    elif path_to_food[1] in options:
-        the_move = path_to_food[1]
-    elif len(previous_moves) != 0 and previous_moves[0] in options:
-        the_move = previous_moves[0]
+    if nearest_food["distance"] >= snake0["health"]:
+        food_ratio = 100
+    elif snake0["health"] < 50:
+        food_ratio = 100 - snake["health"]
     else:
-        the_move = random.choice(options)
+        food_ratio = 0
 
-    print(f"Available moves: {options} Chosen move: {the_move}")
-    print(f"Previous moves: {previous_moves}")
-    print(f"Path to nearest food: {path_to_food}")
+    # head to head kills
+    # Notes: head to head kills might unlock dead ends
+    possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), options))
 
-    return move_response(the_move)
+    # keep moving
+    previous_move = get_previous_snake_moves(data["you"])
+    if len(previous_move) != 0:
+        previous_move = previous_move[0:1]
+
+    apply_rating(rated_options, nearest_food_routes, food_ratio)
+    apply_rating(rated_options, possible_head_to_head_kills, 50)
+    apply_rating(rated_options, previous_move, 10)
+
+    print(rated_options)
+
+    return move_response(max(rated_options, key=rated_options.get))
 
 
 @bottle.post('/end')
