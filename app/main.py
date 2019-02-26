@@ -192,6 +192,27 @@ def calculate_path(snake, food, strategy="squared"):
     return moves
 
 
+def reachable_positions_after_move(matrix, snake_head, move):
+    pos = get_new_position(snake_head, move)
+    _matrix = np.copy(matrix)
+    floodfill(_matrix, pos["y"], pos["x"])
+    return np.count_nonzero(_matrix == -1)
+
+
+def floodfill(matrix, x, y):
+    if matrix[x][y] == 0:
+        matrix[x][y] = -1
+        # recursively invoke flood fill on all surrounding cells:
+        if x > 0:
+            floodfill(matrix, x - 1, y)
+        if x < len(matrix[y]) - 1:
+            floodfill(matrix, x + 1, y)
+        if y > 0:
+            floodfill(matrix, x, y - 1)
+        if y < len(matrix) - 1:
+            floodfill(matrix, x, y + 1)
+    else:
+        return
 
 
 @bottle.post('/move')
@@ -212,26 +233,41 @@ def move():
 
     matrix = np.zeros((width, height))
 
+    SNAKE_N = 1
+    SNAKE_N_HEAD = 2
+    SNAKE_0 = 3
+    SNAKE_0_HEAD = 4
+    FOOD = 5
+
     for snake in snakes:
-        for pos in snake["body"]:
-            matrix[pos["y"]][pos["x"]] = 1
+        head = snake["body"][0]
+        matrix[head["y"]][head["x"]] = SNAKE_N_HEAD
+        for pos in snake["body"][1:]:
+            matrix[pos["y"]][pos["x"]] = SNAKE_N
+
+    head = snake0["body"][0]
+    matrix[head["y"]][head["x"]] = SNAKE_0_HEAD
+    for pos in snake0["body"][1:]:
+        matrix[pos["y"]][pos["x"]] = SNAKE_0
 
     previous_moves = get_previous_snake_moves(data["you"])
 
+    # suicide moves
     wall_collusions = list(filter(will_collide_wall(snake0, height, width), OPTIONS))
     snake_colsusions = list(filter(will_collide_snake(snake0, snakes), OPTIONS))
 
     options = list(set(OPTIONS) - set(wall_collusions) - set(snake_colsusions))
 
+    for option in options:
+        pass
+
+    # head to head possibilities
     possible_head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), options))
     possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), options))
 
-    if snake0["health"] < 50:
-        nearest_food = \
-            sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
-        path_to_food = calculate_path(snake0, nearest_food)
-    else:
-        path_to_food = [None, None]
+    # food routes
+    nearest_food = sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
+    nearest_food_routes = calculate_path(snake0, nearest_food)
 
     if path_to_food[0] in options:
         the_move = path_to_food[0]
