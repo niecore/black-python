@@ -2,6 +2,7 @@ import json
 import os
 import random
 import bottle
+import numpy as np
 
 from app.api import ping_response, start_response, move_response, end_response
 
@@ -134,6 +135,7 @@ def will_collide_head_to_head(snake, snakes):
 
     return f
 
+
 def will_kill_head_to_head(snake, snakes):
     def f(move):
         next_head = get_new_position(get_snake_head(snake), move)
@@ -208,12 +210,21 @@ def move():
     width = data["board"]["width"]
     food = data["board"]["food"]
 
+    matrix = np.zeros((width, height))
+
+    for snake in snakes:
+        for pos in snake["body"]:
+            matrix[pos["y"]][pos["x"]] = 1
+
     previous_moves = get_previous_snake_moves(data["you"])
 
-    wall_collusions_ = list(filter(will_collide_wall(snake0, height, width), OPTIONS))
+    wall_collusions = list(filter(will_collide_wall(snake0, height, width), OPTIONS))
     snake_colsusions = list(filter(will_collide_snake(snake0, snakes), OPTIONS))
-    possible_head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), OPTIONS))
-    possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), OPTIONS))
+
+    options = list(set(OPTIONS) - set(wall_collusions) - set(snake_colsusions))
+
+    possible_head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), options))
+    possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), options))
 
     if snake0["health"] < 50:
         nearest_food = \
