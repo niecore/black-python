@@ -128,7 +128,7 @@ def will_collide_head_to_head(snake, snakes):
         for other_snake in get_other_snakes(snake, snakes):
             for other_move in OPTIONS:
                 if collide(next_head, get_new_position(get_snake_head(other_snake), other_move)) \
-                        and other_snake["health"] >= snake["health"]:
+                        and other_snake["health"] > snake["health"]:
                     return True
 
         return False
