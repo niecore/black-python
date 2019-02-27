@@ -57,6 +57,10 @@ def get_snake_head(snake):
     return snake["body"][0]
 
 
+def get_snake_tail(snake):
+    return snake["body"][:-1]
+
+
 def get_new_position(pos, move):
     new_pos = pos.copy()
 
@@ -99,29 +103,48 @@ def collide(a, b):
     return a["x"] == b["x"] and a["y"] == b["y"]
 
 
+def wall_collusion(pos, height, width):
+    return not (width > pos["x"] >= 0 and height > pos["y"] >= 0)
+
+
 def will_collide_wall(snake, height, width):
     def f(move):
         next_head = get_new_position(get_snake_head(snake), move)
-        return not (width > next_head["x"] >= 0 and height > next_head["y"] >= 0)
+        return wall_collusion(next_head, height, width)
 
     return f
+
+
+def snake_collusion(pos, snakes):
+    for other_snake in snakes:
+        for position in other_snake["body"][:-1]:
+            if collide(position, pos):
+                return True
+
+    return False
 
 
 def will_collide_snake(snake, snakes):
     def f(move):
         next_head = get_new_position(get_snake_head(snake), move)
-
-        for other_snake in snakes:
-            for position in other_snake["body"][:-1]:
-                if collide(position, next_head):
-                    return True
-
-        return False
+        return snake_collusion(next_head, snakes)
 
     return f
 
 
-def will_collide_head_to_head(snake, snakes):
+def starved(snake0):
+    return snake0["health"] == 0
+
+
+def head_to_head_death(snake0, snakes):
+    for other_snake in get_other_snakes(snake0, snakes):
+        if collide(get_snake_head(snake0), get_snake_head(other_snake)) \
+                and get_snake_len(other_snake) >= get_snake_len(snake):
+            return True
+    return False
+
+
+def could_collide_head_to_head(snake, snakes):
     def f(move):
         next_head = get_new_position(get_snake_head(snake), move)
 
@@ -213,7 +236,6 @@ def floodfill(matrix, x, y):
 
 
 def apply_rating(options, keys, modificator):
-
     for key in keys:
         try:
             options[key] = options[key] + modificator
@@ -245,7 +267,6 @@ def get_snake_matrix(snake0, snakes, width, height):
 
 
 def calculate_best_move(snake0, snakes, height, width, food):
-
     rated_options = {option: 0 for option in OPTIONS}
     #
     #   Negative Points
@@ -264,7 +285,7 @@ def calculate_best_move(snake0, snakes, height, width, food):
         options)
 
     # head to head deaths
-    head_to_head_deaths = list(filter(will_collide_head_to_head(snake0, snakes), options))
+    head_to_head_deaths = list(filter(could_collide_head_to_head(snake0, snakes), options))
 
     apply_rating(rated_options, wall_collusions, -1000)
     apply_rating(rated_options, snake_collusions, -1000)
@@ -286,7 +307,7 @@ def calculate_best_move(snake0, snakes, height, width, food):
     if nearest_food["distance"] >= snake0["health"]:
         food_ratio = 100
     elif snake0["health"] < 50:
-        food_ratio = 100 - snake["health"]
+        food_ratio = 100 - snake0["health"]
     else:
         food_ratio = 0
 
@@ -295,7 +316,7 @@ def calculate_best_move(snake0, snakes, height, width, food):
     possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), options))
 
     # keep moving
-    previous_move = get_previous_snake_moves(data["you"])
+    previous_move = get_previous_snake_moves(snake0)
     if len(previous_move) != 0:
         previous_move = previous_move[0:1]
 
@@ -308,13 +329,10 @@ def calculate_best_move(snake0, snakes, height, width, food):
 
 @bottle.post('/move')
 def move():
-
     # Todo:
     #
     # 1. Utilize space when in dead end
-    #
-    #
-    #
+    # 2. Block ways of other snakes
     #
 
     data = bottle.request.json
@@ -324,15 +342,44 @@ def move():
     snakes = data["board"]["snakes"]
     height = data["board"]["height"]
     width = data["board"]["width"]
-    food = data["board"]["food"]
+    foods = data["board"]["food"]
+
+    for snake0 in snakes:
+        snake0.update({"alive": True})
 
     matrix = get_snake_matrix(snake0, snakes, width, height)
 
+    move_options = [calculate_best_move(snake0, snakes, height, width, foods) for snake0 in snakes]
+
+    # Move head by adding a new body part at the start of the body array in the move direction
+    for rated_options, snake0 in zip(move_options, snakes):
+        fav_move = max(rated_options, key=rated_options.get)
+        snake0["body"].insert(0, get_new_position(get_snake_head(snake0), fav_move))
+
+    # Reduce health
     for snake0 in snakes:
-        move_options = calculate_best_move(snake0, snakes, height, width, food)
+        snake0["health"] = snake0["health"] - 1
 
+    # Check if the snake ate and adjust health
+    # If the snake ate this turn, add a new body segment, underneath the current tail.
+    # Remove eaten food
+    for snake0 in snakes:
+        if get_snake_head(snake0) in foods:
+            snake0["health"] = 100
+            snake0["body"].append = snake0["body"][:-1]
+            foods = filter(lambda food: food == get_snake_head(snake0), foods)
 
+    # Remove the final body segment
+    for snake0 in snakes:
+        del snake0["body"][-1]
 
+    # Check for snake death
+    for snake0 in snakes:
+        if wall_collusion(get_snake_head(snake0), height, width) or \
+                snake_collusion(get_snake_head(snake0), snakes) or \
+                starved(snake0) or \
+                head_to_head_death(snake0, snakes):
+            snake0["alive"] = False
 
     return move_response(max(rated_options, key=rated_options.get))
 
