@@ -48,9 +48,9 @@ def start():
     """
     print(json.dumps(data))
 
-    color = "#00FF00"
+    color = ["#000000"]
 
-    return start_response(color)
+    return start_response(random.choice)
 
 
 def get_snake_head(snake):
