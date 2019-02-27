@@ -112,7 +112,7 @@ def will_collide_snake(snake, snakes):
         next_head = get_new_position(get_snake_head(snake), move)
 
         for other_snake in snakes:
-            for position in other_snake["body"]:
+            for position in other_snake["body"][:-1]:
                 if collide(position, next_head):
                     return True
 
@@ -177,15 +177,12 @@ def calculate_path(snake, food, strategy="squared"):
             moves.append("right")
         elif food["x"] < get_snake_head(snake)["x"]:
             moves.append("left")
-        else:
-            moves.append(None)
 
         if food["y"] > get_snake_head(snake)["y"]:
             moves.append("down")
         elif food["y"] < get_snake_head(snake)["y"]:
             moves.append("up")
-        else:
-            moves.append(None)
+
     else:
         pass
 
@@ -224,22 +221,7 @@ def apply_rating(options, keys, modificator):
             print("unable to handle key")
 
 
-@bottle.post('/move')
-def move():
-    data = bottle.request.json
-
-    """
-    TODO: Using the data from the endpoint request object, your
-            snake AI must choose a direction to move in.
-    """
-    print(json.dumps(data))
-
-    snake0 = data["you"]
-    snakes = data["board"]["snakes"]
-    height = data["board"]["height"]
-    width = data["board"]["width"]
-    food = data["board"]["food"]
-
+def get_snake_matrix(snake0, snakes, width, height):
     matrix = np.zeros((width, height))
 
     SNAKE_N = 1
@@ -251,16 +233,20 @@ def move():
     for snake in snakes:
         head = snake["body"][0]
         matrix[head["y"]][head["x"]] = SNAKE_N_HEAD
-        for pos in snake["body"][1:]:
+        for pos in snake["body"][1:-1]:
             matrix[pos["y"]][pos["x"]] = SNAKE_N
 
     head = snake0["body"][0]
     matrix[head["y"]][head["x"]] = SNAKE_0_HEAD
-    for pos in snake0["body"][1:]:
+    for pos in snake0["body"][1:-1]:
         matrix[pos["y"]][pos["x"]] = SNAKE_0
 
-    rated_options = {option: 0 for option in OPTIONS}
+    return matrix
 
+
+def calculate_best_move(snake0, snakes, height, width, food):
+
+    rated_options = {option: 0 for option in OPTIONS}
     #
     #   Negative Points
     #
@@ -317,7 +303,36 @@ def move():
     apply_rating(rated_options, possible_head_to_head_kills, 50)
     apply_rating(rated_options, previous_move, 10)
 
-    print(rated_options)
+    return rated_options
+
+
+@bottle.post('/move')
+def move():
+
+    # Todo:
+    #
+    # 1. Utilize space when in dead end
+    #
+    #
+    #
+    #
+
+    data = bottle.request.json
+    print(json.dumps(data))
+
+    snake0 = data["you"]
+    snakes = data["board"]["snakes"]
+    height = data["board"]["height"]
+    width = data["board"]["width"]
+    food = data["board"]["food"]
+
+    matrix = get_snake_matrix(snake0, snakes, width, height)
+
+    for snake0 in snakes:
+        move_options = calculate_best_move(snake0, snakes, height, width, food)
+
+
+
 
     return move_response(max(rated_options, key=rated_options.get))
 
