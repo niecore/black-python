@@ -1,6 +1,6 @@
 import json
 import os
-import random
+
 import bottle
 import numpy as np
 
@@ -302,18 +302,20 @@ def calculate_best_move(snake0, snakes, height, width, food):
     #
 
     # food moves
-    try:
-        nearest_food = sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
-    except:
-        nearest_food = {"x": 0, "y": 0}
+    nearest_foods = sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])
 
-    nearest_food_routes = calculate_path(snake0, nearest_food)
+    if len(nearest_foods):
+        nearest_food = nearest_foods[0]
+        nearest_food_routes = calculate_path(snake0, nearest_food)
 
-    if nearest_food["distance"] >= snake0["health"]:
-        food_ratio = 100
-    elif snake0["health"] < 50:
-        food_ratio = 100 - snake0["health"]
+        if nearest_food["distance"] >= snake0["health"]:
+            food_ratio = 100
+        elif snake0["health"] < 50:
+            food_ratio = 100 - snake0["health"]
+        else:
+            food_ratio = 0
     else:
+        nearest_food_routes = []
         food_ratio = 0
 
     # head to head kills
@@ -385,8 +387,6 @@ def move():
                 starved(snake0) or \
                 head_to_head_death(snake0, snakes_alive):
             snake0["alive"] = False
-
-
 
     # fall back
     meh = calculate_best_move(snake0, snakes, height, width, foods)
