@@ -302,7 +302,11 @@ def calculate_best_move(snake0, snakes, height, width, food):
     #
 
     # food moves
-    nearest_food = sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
+    try:
+        nearest_food = sorted(list(map(distance_from_snake(snake0), food)), key=lambda x: x["distance"])[0]
+    except:
+        nearest_food = {"x": 0, "y": 0}
+
     nearest_food_routes = calculate_path(snake0, nearest_food)
 
     if nearest_food["distance"] >= snake0["health"]:
