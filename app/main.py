@@ -351,6 +351,10 @@ def move():
     width = data["board"]["width"]
     foods = data["board"]["food"]
 
+    # fall back
+    meh = calculate_best_move(snake0, snakes, height, width, foods)
+    return move_response(max(meh, key=meh.get))
+
     for snake0 in snakes:
         snake0.update({"alive": True})
 
@@ -388,9 +392,7 @@ def move():
                 head_to_head_death(snake0, snakes_alive):
             snake0["alive"] = False
 
-    # fall back
-    meh = calculate_best_move(snake0, snakes, height, width, foods)
-    return move_response(max(meh, key=meh.get))
+
 
 
 @bottle.post('/end')
