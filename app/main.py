@@ -4,6 +4,7 @@ import os
 import bottle
 import numpy as np
 
+from app.a_star import astar
 from app.api import ping_response, start_response, move_response, end_response
 
 OPTIONS = ['up', 'down', 'left', 'right']
@@ -58,7 +59,7 @@ def get_snake_head(snake):
 
 
 def get_snake_tail(snake):
-    return snake["body"][:-1]
+    return snake["body"][-1]
 
 
 def get_new_position(pos, move):
@@ -298,7 +299,7 @@ def calculate_best_move(snake0, snakes, height, width, food):
     #
     #   1. Eat if hungry
     #   2. Kill if possible
-    #   3. Continue moving
+    #   3. Follow Tail
     #
 
     # food moves
@@ -322,6 +323,17 @@ def calculate_best_move(snake0, snakes, height, width, food):
     # Notes: head to head kills might unlock dead ends
     possible_head_to_head_kills = list(filter(will_kill_head_to_head(snake0, snakes), options))
 
+    # find tail
+    path_to_tail = astar(matrix, cords_tuple(get_snake_head(snake0)), cords_tuple(get_snake_tail(snake0)))
+
+    if path_to_tail is False:
+        path_to_tail = []
+    elif len(path_to_tail):
+        coord = path_to_tail[-1]
+        path_to_tail = [get_move(get_snake_head(snake0), {"x": coord[0], "y": coord[1]})]
+    else:
+        path_to_tail = []
+
     # keep moving
     previous_move = get_previous_snake_moves(snake0)
     if len(previous_move) != 0:
@@ -329,9 +341,20 @@ def calculate_best_move(snake0, snakes, height, width, food):
 
     apply_rating(rated_options, nearest_food_routes, food_ratio)
     apply_rating(rated_options, possible_head_to_head_kills, 50)
+    apply_rating(rated_options, path_to_tail, 20)
     apply_rating(rated_options, previous_move, 10)
 
     return rated_options
+
+
+def cords_tuple(cord):
+    return (cord["x"], cord["y"])
+
+
+def get_move(old_cords, new_cords):
+    for move in OPTIONS:
+        if collide(get_new_position(old_cords, move), new_cords):
+            return move
 
 
 @bottle.post('/move')
@@ -391,8 +414,6 @@ def move():
                 starved(snake0) or \
                 head_to_head_death(snake0, snakes_alive):
             snake0["alive"] = False
-
-
 
 
 @bottle.post('/end')
