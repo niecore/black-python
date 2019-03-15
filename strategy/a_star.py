@@ -5,6 +5,8 @@ from heapq import *
 
 import numpy as np
 
+from model.pos import Point
+
 
 def heuristic(a, b):
     return (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2
@@ -12,6 +14,9 @@ def heuristic(a, b):
 
 def astar(array, start, goal):
     neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+
+    start = (start.x, start.y)
+    goal = (goal.x, goal.y)
 
     array[goal[0]][goal[1]] = 0
 
@@ -30,7 +35,7 @@ def astar(array, start, goal):
         if current == goal:
             data = []
             while current in came_from:
-                data.append(current)
+                data.insert(0, Point(current[0], current[1]))
                 current = came_from[current]
             return data
 
@@ -40,7 +45,7 @@ def astar(array, start, goal):
             tentative_g_score = gscore[current] + heuristic(current, neighbor)
             if 0 <= neighbor[0] < array.shape[0]:
                 if 0 <= neighbor[1] < array.shape[1]:
-                    if array[neighbor[0]][neighbor[1]] != 0:
+                    if array[neighbor[0]][neighbor[1]] > 0:
                         continue
                 else:
                     # array bound y walls
